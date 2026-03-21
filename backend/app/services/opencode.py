@@ -1,19 +1,23 @@
 import subprocess
 import json
 import os
+import httpx
 from typing import Optional
 
 
 class OpenCodeService:
-    """Service to integrate with OpenCode CLI for skill execution"""
+    """Service to integrate with OpenCode CLI or E2B for skill execution"""
     
     def __init__(self):
         self.opencode_cmd = os.environ.get("OPENCODE_CMD", "opencode")
+        self.e2b_api_key = os.environ.get("E2B_API_KEY")
+        self.e2b_sandbox_id = os.environ.get("E2B_SANDBOX_ID")
+        self.use_e2b = bool(self.e2b_api_key and self.e2b_sandbox_id)
         self.timeout = 120.0
     
     async def execute_skill(self, prompt: str, context: Optional[dict] = None) -> dict:
         """
-        Execute a skill using OpenCode CLI
+        Execute a skill using OpenCode CLI or E2B
         
         Args:
             prompt: The skill prompt to execute
@@ -24,10 +28,52 @@ class OpenCodeService:
         """
         full_prompt = self._build_prompt(prompt, context)
         
+        if self.use_e2b:
+            return await self._execute_via_e2b(full_prompt)
+        else:
+            return await self._execute_via_cli(full_prompt)
+    
+    async def _execute_via_e2b(self, prompt: str) -> dict:
+        """Execute via E2B cloud sandbox"""
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"https://api.e2b.dev/v1/sandboxes/{self.e2b_sandbox_id}/run",
+                    json={
+                        "model": "gpt-4o",
+                        "prompt": prompt,
+                        "stream": False
+                    },
+                    headers={
+                        "Authorization": f"Bearer {self.e2b_api_key}",
+                        "Content-Type": "application/json"
+                    }
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                return {
+                    "success": True,
+                    "output": result.get("output", ""),
+                    "usage": result.get("usage", {})
+                }
+        except httpx.TimeoutException:
+            return {
+                "success": False,
+                "error": "执行超时，请稍后重试"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"E2B 执行失败: {str(e)}"
+            }
+    
+    async def _execute_via_cli(self, prompt: str) -> dict:
+        """Execute via local OpenCode CLI"""
         try:
             # Use opencode run with JSON format
             result = subprocess.run(
-                [self.opencode_cmd, "run", "--format", "json", "--", full_prompt],
+                [self.opencode_cmd, "run", "--format", "json", "--", prompt],
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
@@ -50,9 +96,6 @@ class OpenCodeService:
                     if event.get("type") == "text" and "text" in event.get("part", {}):
                         final_output = event["part"]["text"]
                         break
-                    elif event.get("type") == "step_finish":
-                        # Extract any text from step_finish if no direct text found yet
-                        pass
                 except json.JSONDecodeError:
                     continue
             
@@ -108,6 +151,8 @@ class OpenCodeService:
     
     async def health_check(self) -> bool:
         """Check if OpenCode CLI is available"""
+        if self.use_e2b:
+            return True  # E2B is always available if configured
         try:
             result = subprocess.run(
                 [self.opencode_cmd, "--version"],

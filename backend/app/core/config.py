@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     OPENCODE_CMD: str = "opencode"
     OPENCODE_CWD: str = "/home/node/.openclaw/workspace"
     
+    # E2B (alternative to local OpenCode)
+    E2B_API_KEY: str = ""
+    E2B_SANDBOX_ID: str = ""
+    
     class Config:
         env_file = ".env"
 

@@ -1,0 +1,19 @@
+# E2B AI Agent Configuration
+# Used for running OpenCode securely in a sandboxed environment
+
+template: e2b_opencode
+name: novel-agent-skill-executor
+
+# The AI agent that will be used
+agent:
+  model: gpt-4o
+  api_key: ${OPENAI_API_KEY}
+
+# Timeout for skill execution (in seconds)
+timeout: 120
+
+# Memory allocation
+memory: 512
+
+# Enable networking if needed
+allowNetworking: true
