@@ -30,16 +30,30 @@ app.include_router(files.router)
 app.include_router(system.router)
 
 # Serve frontend static files
-frontend_dist = os.path.join(os.path.dirname(__file__), "../../frontend/dist")
-if os.path.exists(frontend_dist):
+# Try multiple possible locations
+possible_paths = [
+    os.path.join(os.path.dirname(__file__), "../../frontend/dist"),
+    "/app/frontend/dist",
+    os.path.join(os.path.dirname(__file__), "../frontend/dist"),
+]
+frontend_dist = None
+for p in possible_paths:
+    if os.path.exists(os.path.join(p, "index.html")):
+        frontend_dist = p
+        break
+
+print(f"Frontend dist path: {frontend_dist}")
+
+if frontend_dist:
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
     
 @app.get("/")
 async def root():
     """Serve frontend or redirect to docs if not built"""
-    index_path = os.path.join(frontend_dist, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
+    if frontend_dist:
+        index_path = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
     return RedirectResponse(url="/docs")
 
 
