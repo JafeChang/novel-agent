@@ -67,26 +67,29 @@ services:
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: novel-agent
-      OPENCODE_CMD: /usr/local/bin/opencode
+      OPENCODE_CMD: opencode
+      OPENCODE_CWD: /workspace
     ports:
       - "8000:8000"
     volumes:
-      - /home/node/.local/bin/opencode:/usr/local/bin/opencode:ro
-      - /home/node/.opencode:/home/node/.opencode:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - ./backend:/app
+      - ./frontend:/app/frontend
+      - opencode_data:/home/node/.opencode
+      - workspace:/workspace
+    working_dir: /app
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
-    network_mode: host
+    networks:
+      - novel-network
 
   frontend:
     image: node:20-alpine
     container_name: novel-agent-frontend
     working_dir: /app
-    command: sh -c "npm install -g pnpm && pnpm install && pnpm run dev --host"
+    command: sh -c "npm install -g pnpm && pnpm install && pnpm dev --host"
     environment:
       VITE_API_URL: http://localhost:8000
     ports:
@@ -101,6 +104,8 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  opencode_data:
+  workspace:
 
 networks:
   novel-network:
