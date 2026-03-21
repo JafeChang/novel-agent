@@ -9,6 +9,7 @@
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10,
     "healthcheckPath": "/health",
-    "port": 8000
+    "port": 8000,
+    "preDeployCommand": null
   }
 }
