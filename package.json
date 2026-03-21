@@ -1,0 +1,13 @@
+{
+  "name": "novel-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  }
+}
