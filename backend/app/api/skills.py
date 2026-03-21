@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
-import httpx
+from typing import List, Optional
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.config import settings
 from app.models.user import User
 from app.models.skill import Skill
+from app.models.chapter import Chapter
+from app.models.project import Project
 from app.schemas.skill import SkillCreate, SkillUpdate, SkillResponse, SkillExecuteRequest, SkillExecuteResponse
+from app.services.opencode import opencode_service
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
@@ -15,13 +16,13 @@ router = APIRouter(prefix="/api/skills", tags=["skills"])
 @router.get("", response_model=List[SkillResponse])
 def list_skills(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    include_public: bool = False
+    current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Skill).filter(
+    """List all skills (user's own + public skills)"""
+    skills = db.query(Skill).filter(
         (Skill.user_id == current_user.id) | (Skill.is_public == 1)
-    )
-    return query.all()
+    ).all()
+    return skills
 
 
 @router.post("", response_model=SkillResponse, status_code=status.HTTP_201_CREATED)
@@ -30,6 +31,7 @@ def create_skill(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """Create a new skill"""
     skill = Skill(
         user_id=current_user.id,
         name=skill_data.name,
@@ -49,6 +51,7 @@ def get_skill(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """Get a specific skill"""
     skill = db.query(Skill).filter(
         Skill.id == skill_id,
         (Skill.user_id == current_user.id) | (Skill.is_public == 1)
@@ -65,6 +68,7 @@ def update_skill(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """Update a skill (only owner can update)"""
     skill = db.query(Skill).filter(
         Skill.id == skill_id,
         Skill.user_id == current_user.id
@@ -94,6 +98,7 @@ def delete_skill(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """Delete a skill (only owner can delete)"""
     skill = db.query(Skill).filter(
         Skill.id == skill_id,
         Skill.user_id == current_user.id
@@ -112,6 +117,8 @@ async def execute_skill(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """Execute a skill using OpenCode"""
+    # Get the skill
     skill = db.query(Skill).filter(
         Skill.id == skill_id,
         (Skill.user_id == current_user.id) | (Skill.is_public == 1)
@@ -119,43 +126,66 @@ async def execute_skill(
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
     
-    # Build the prompt for OpenCode
+    # Build execution context
+    context = {}
     parameters = request.parameters or {}
-    prompt = f"""
-## Skill: {skill.name}
+    
+    # If chapter_id provided, get chapter content for context
+    if request.chapter_id:
+        chapter = db.query(Chapter).join(Project).filter(
+            Chapter.id == request.chapter_id,
+            Project.user_id == current_user.id
+        ).first()
+        if chapter:
+            context["chapter_content"] = chapter.content or ""
+    
+    # Add config parameters
+    if skill.config:
+        context["parameters"] = parameters
+        if "style" in skill.config:
+            context["style"] = skill.config["style"]
+    
+    # Build the prompt from skill code
+    prompt = f"""## Skill: {skill.name}
 
 {skill.description or ''}
-
-### Configuration:
-```json
-{skill.config or '{}'}
-```
-
-### User Parameters:
-```json
-{parameters}
-```
 
 ### Skill Code:
 {skill.code}
 
-Please execute this skill and return the result.
-"""
+---
+Please execute this skill according to the code above."""
+
+    # Execute via OpenCode
+    result = await opencode_service.execute_skill(prompt, context)
     
-    try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                f"{settings.OPENCODE_API_URL}/execute",
-                json={"prompt": prompt}
-            )
-            response.raise_for_status()
-            result = response.json()
-            return SkillExecuteResponse(
-                success=True,
-                output=result.get("output")
-            )
-    except httpx.HTTPError as e:
-        return SkillExecuteResponse(
-            success=False,
-            error=str(e)
-        )
+    return SkillExecuteResponse(
+        success=result["success"],
+        output=result.get("output"),
+        error=result.get("error")
+    )
+
+
+@router.get("/{skill_id}/preview")
+async def preview_skill(
+    skill_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Preview skill configuration and code"""
+    skill = db.query(Skill).filter(
+        Skill.id == skill_id,
+        (Skill.user_id == current_user.id) | (Skill.is_public == 1)
+    ).first()
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    
+    return {
+        "id": skill.id,
+        "name": skill.name,
+        "description": skill.description,
+        "config": skill.config,
+        "code": skill.code,
+        "is_public": skill.is_public,
+        "config_preview": skill.config or {}
+    }

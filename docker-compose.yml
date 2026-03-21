@@ -17,6 +17,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - novel-network
 
   minio:
     image: minio/minio:latest
@@ -35,8 +37,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - novel-network
 
-  # Optional: Create default bucket on startup
   minio-init:
     image: minio/mc
     depends_on:
@@ -49,7 +52,52 @@ services:
       mc anonymous set download myminio/novel-agent;
       exit 0;
       "
+    networks:
+      - novel-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: novel-agent-backend
+    environment:
+      DATABASE_URL: postgresql://novel:novel@postgres:5432/novel_agent
+      SECRET_KEY: novel-agent-secret-key-change-in-production
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: novel-agent
+      OPENCODE_API_URL: http://host.docker.internal:8080
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - novel-network
+
+  frontend:
+    image: node:20-alpine
+    container_name: novel-agent-frontend
+    working_dir: /app
+    command: sh -c "npm install -g pnpm && pnpm install && pnpm run dev --host"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - backend
+    networks:
+      - novel-network
 
 volumes:
   postgres_data:
   minio_data:
+
+networks:
+  novel-network:
+    driver: bridge
