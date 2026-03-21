@@ -30,11 +30,12 @@ app.include_router(files.router)
 app.include_router(system.router)
 
 # Serve frontend static files
-# Try multiple possible locations
+# Try multiple possible locations (Docker copies frontend/ to /app, not /app/frontend/)
 possible_paths = [
-    os.path.join(os.path.dirname(__file__), "../../frontend/dist"),
+    "/app/dist",
     "/app/frontend/dist",
-    os.path.join(os.path.dirname(__file__), "../frontend/dist"),
+    os.path.join(os.path.dirname(__file__), "../../dist"),
+    os.path.join(os.path.dirname(__file__), "../dist"),
 ]
 frontend_dist = None
 for p in possible_paths:
