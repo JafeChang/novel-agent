@@ -1,14 +1,18 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+import os
 
 
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "Novel Agent"
     DEBUG: bool = True
-    
-    # Database
-    DATABASE_URL: str = "postgresql://novel:novel@localhost:5432/novel_agent"
+
+    # Database — reads DATABASE_URL from the environment (set automatically by
+    # Railway's Postgres service); falls back to localhost for local development.
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL", "postgresql://novel:novel@localhost:5432/novel_agent"
+    )
     
     # JWT
     SECRET_KEY: str = "your-secret-key-change-in-production"
