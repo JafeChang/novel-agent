@@ -12,16 +12,12 @@ jobs:
       
       - name: Install Railway CLI
         run: |
-          curl -fsSL https://github.com/railwayapp/cli/releases/download/v4.33.0/railway-v4.33.0-x86_64-unknown-linux-gnu.tar.gz | tar -xz
-          mv railway /usr/local/bin/
+          wget -q https://github.com/railwayapp/cli/releases/download/v4.33.0/railway-v4.33.0-amd64.deb
+          dpkg -i railway-v4.33.0-amd64.deb || apt-get install -f -y
           railway version
 
-      - name: Login to Railway
-        run: railway login --token ${{ secrets.RAILWAY_TOKEN }}
-        
       - name: Deploy
-        run: |
-          railway up --service novel-agent --detach
+        run: railway up --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
