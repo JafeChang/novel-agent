@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.services.s3 import s3_service
+from app.services.s3 import get_s3_service
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
@@ -17,7 +17,7 @@ async def upload_file(
     """Upload a file to S3"""
     try:
         contents = await file.read()
-        object_name = s3_service.upload_file(
+        object_name = get_s3_service().upload_file(
             contents,
             file.filename,
             file.content_type or "application/octet-stream"
@@ -34,7 +34,7 @@ async def download_file(
 ):
     """Download a file from S3"""
     try:
-        contents = s3_service.download_file(object_name)
+        contents = get_s3_service().download_file(object_name)
         return Response(content=contents, media_type="application/octet-stream")
     except Exception as e:
         raise HTTPException(status_code=404, detail="File not found")
@@ -47,7 +47,7 @@ async def delete_file(
 ):
     """Delete a file from S3"""
     try:
-        s3_service.delete_file(object_name)
+        get_s3_service().delete_file(object_name)
         return {"message": "File deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -60,7 +60,7 @@ async def get_file_url(
 ):
     """Get a presigned URL for the file"""
     try:
-        url = s3_service.get_presigned_url(object_name)
+        url = get_s3_service().get_presigned_url(object_name)
         return {"url": url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

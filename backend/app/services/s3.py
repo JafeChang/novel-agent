@@ -7,11 +7,13 @@ import uuid
 
 class S3Service:
     def __init__(self):
+        # Strip protocol prefix if present (Minio doesn't accept http://)
+        endpoint = settings.S3_ENDPOINT.replace("http://", "").replace("https://", "")
         self.client = Minio(
-            settings.S3_ENDPOINT,
+            endpoint,
             access_key=settings.S3_ACCESS_KEY,
             secret_key=settings.S3_SECRET_KEY,
-            secure=False  # Set True for HTTPS
+            secure=settings.S3_ENDPOINT.startswith("https")
         )
         self.bucket = settings.S3_BUCKET
         self._ensure_bucket()
@@ -64,5 +66,11 @@ class S3Service:
             raise Exception(f"Presigned URL failed: {e}")
 
 
-# Singleton instance
-s3_service = S3Service()
+# Singleton instance - lazy initialization
+_s3_service = None
+
+def get_s3_service():
+    global _s3_service
+    if _s3_service is None:
+        _s3_service = S3Service()
+    return _s3_service
