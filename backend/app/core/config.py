@@ -1,6 +1,6 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-import os
 
 
 class Settings(BaseSettings):
@@ -10,8 +10,9 @@ class Settings(BaseSettings):
 
     # Database — reads DATABASE_URL from the environment (set automatically by
     # Railway's Postgres service); falls back to localhost for local development.
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL", "postgresql://novel:novel@localhost:5432/novel_agent"
+    DATABASE_URL: str = Field(
+        default="postgresql://novel:novel@localhost:5432/novel_agent",
+        validation_alias="DATABASE_URL",
     )
     
     # JWT
