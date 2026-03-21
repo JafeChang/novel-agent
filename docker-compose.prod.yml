@@ -1,0 +1,28 @@
+version: '3.8'
+
+# Production deployment with Fly.io
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - OPENCODE_CMD=opencode
+      - OPENCODE_CWD=/data
+      - PORT=8080
+    volumes:
+      - novel_data:/data
+    restart: unless-stopped
+
+volumes:
+  novel_data:
