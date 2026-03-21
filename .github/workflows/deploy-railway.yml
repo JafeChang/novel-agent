@@ -9,20 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install Railway CLI
-        run: |
-          # Try binary download
-          curl -fsSL "https://github.com/railwayapp/cli/releases/download/v4.33.0/railway-v4.33.0-x86_64-unknown-linux-musl.tar.gz" -o railway.tar.gz || \
-          curl -fsSL "https://railway-app.s3.amazonaws.com/railway-v4.33.0-x86_64-unknown-linux-musl.tar.gz" -o railway.tar.gz
-          tar -xzf railway.tar.gz
-          chmod +x railway
-          mv railway /usr/local/bin/
-          railway version
-        shell: bash
+
+      - name: Login to Railway
+        uses: railwayhq/railway-login-action@v3
+        with:
+          railway-token: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Deploy
-        run: railway up --detach
+        run: npx @railway/cli@latest up --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
