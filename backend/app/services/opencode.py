@@ -1,18 +1,19 @@
-import httpx
+import subprocess
+import json
+import os
 from typing import Optional
-from app.core.config import settings
 
 
 class OpenCodeService:
-    """Service to integrate with OpenCode for skill execution"""
+    """Service to integrate with OpenCode CLI for skill execution"""
     
     def __init__(self):
-        self.api_url = settings.OPENCODE_API_URL
+        self.opencode_cmd = os.environ.get("OPENCODE_CMD", "opencode")
         self.timeout = 120.0
     
     async def execute_skill(self, prompt: str, context: Optional[dict] = None) -> dict:
         """
-        Execute a skill using OpenCode
+        Execute a skill using OpenCode CLI
         
         Args:
             prompt: The skill prompt to execute
@@ -24,28 +25,62 @@ class OpenCodeService:
         full_prompt = self._build_prompt(prompt, context)
         
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.api_url}/execute",
-                    json={"prompt": full_prompt},
-                    headers={"Content-Type": "application/json"}
-                )
-                response.raise_for_status()
-                result = response.json()
+            # Use opencode run with JSON format
+            result = subprocess.run(
+                [self.opencode_cmd, "run", "--format", "json", "--", full_prompt],
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+                cwd=os.environ.get("OPENCODE_CWD", "/home/node/.openclaw/workspace")
+            )
+            
+            if result.returncode != 0:
                 return {
-                    "success": True,
-                    "output": result.get("output", result.get("response", "")),
-                    "usage": result.get("usage", {})
+                    "success": False,
+                    "error": f"OpenCode error: {result.stderr or 'unknown error'}"
                 }
-        except httpx.TimeoutException:
+            
+            # Parse JSON output - last line contains the final response
+            output_lines = result.stdout.strip().split('\n')
+            final_output = ""
+            
+            for line in reversed(output_lines):
+                try:
+                    event = json.loads(line)
+                    if event.get("type") == "text" and "text" in event.get("part", {}):
+                        final_output = event["part"]["text"]
+                        break
+                    elif event.get("type") == "step_finish":
+                        # Extract any text from step_finish if no direct text found yet
+                        pass
+                except json.JSONDecodeError:
+                    continue
+            
+            # If no text found in events, try to get the last text event
+            if not final_output:
+                for line in output_lines:
+                    try:
+                        event = json.loads(line)
+                        if event.get("type") == "text":
+                            final_output = event.get("part", {}).get("text", "")
+                    except json.JSONDecodeError:
+                        continue
+            
+            return {
+                "success": True,
+                "output": final_output,
+                "usage": {}
+            }
+            
+        except subprocess.TimeoutExpired:
             return {
                 "success": False,
                 "error": "执行超时，请稍后重试"
             }
-        except httpx.HTTPStatusError as e:
+        except FileNotFoundError:
             return {
                 "success": False,
-                "error": f"OpenCode API 错误: {e.response.status_code}"
+                "error": "OpenCode CLI 未找到，请确保已安装: npm install -g opencode-ai"
             }
         except Exception as e:
             return {
@@ -72,11 +107,15 @@ class OpenCodeService:
 请严格按照上述技能描述执行，并返回结果。"""
     
     async def health_check(self) -> bool:
-        """Check if OpenCode is available"""
+        """Check if OpenCode CLI is available"""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{self.api_url}/health")
-                return response.status_code == 200
+            result = subprocess.run(
+                [self.opencode_cmd, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
         except:
             return False
 

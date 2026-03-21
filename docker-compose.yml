@@ -67,16 +67,20 @@ services:
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: novel-agent
-      OPENCODE_API_URL: http://host.docker.internal:8080
+      OPENCODE_CMD: /usr/local/bin/opencode
     ports:
       - "8000:8000"
+    volumes:
+      - /home/node/.local/bin/opencode:/usr/local/bin/opencode:ro
+      - /home/node/.opencode:/home/node/.opencode:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
-    networks:
-      - novel-network
+    network_mode: host
 
   frontend:
     image: node:20-alpine

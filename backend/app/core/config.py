@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     S3_REGION: str = "us-east-1"
     
     # OpenCode
-    OPENCODE_API_URL: str = "http://localhost:8080"
+    OPENCODE_CMD: str = "opencode"
+    OPENCODE_CWD: str = "/home/node/.openclaw/workspace"
     
     class Config:
         env_file = ".env"
