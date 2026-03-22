@@ -9,6 +9,7 @@ from app.models.chapter import Chapter
 from app.models.project import Project
 from app.schemas.skill import SkillCreate, SkillUpdate, SkillResponse, SkillExecuteRequest, SkillExecuteResponse
 from app.services.opencode import opencode_service
+from app.services.default_skills import ensure_default_public_novel_skill
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 

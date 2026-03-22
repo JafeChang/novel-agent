@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 import os
 from app.core.config import settings
-from app.api import auth, projects, chapters, skills, files, system
+from app.api import auth, projects, chapters, skills, files, system, spa
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -28,6 +28,7 @@ app.include_router(chapters.router)
 app.include_router(skills.router)
 app.include_router(files.router)
 app.include_router(system.router)
+app.include_router(spa.router)
 
 # Serve frontend static files
 # Try multiple possible locations (Docker copies frontend/ to /app, not /app/frontend/)
