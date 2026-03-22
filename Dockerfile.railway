@@ -9,8 +9,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && npm install -g pnpm \
     && npm install -g opencode-ai@latest \
-    && rm -rf /var/lib/apt/lists/* \
-    && which opencode || (curl -fsSL https://github.com/opencode-ai/cli/releases/latest/download/opencode-linux-x64 -o /usr/local/bin/opencode && chmod +x /usr/local/bin/opencode)
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY backend/requirements.txt .
