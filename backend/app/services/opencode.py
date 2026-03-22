@@ -10,7 +10,19 @@ class OpenCodeService:
         self.e2b_api_key = os.environ.get("E2B_API_KEY", "").strip()
         self.e2b_sandbox_id = os.environ.get("E2B_SANDBOX_ID", "").strip()
         self.e2b_template = os.environ.get("E2B_TEMPLATE", "").strip()
+        self.e2b_api_base = os.environ.get("E2B_API_BASE", "https://api.e2b.app").strip().rstrip("/")
         self.timeout = 120.0
+
+    def _e2b_headers(self) -> dict:
+        """
+        E2B's current public REST docs use `X-API-Key`.
+        Keep `Authorization` as a compatibility fallback for older setups.
+        """
+        return {
+            "X-API-Key": self.e2b_api_key,
+            "Authorization": f"Bearer {self.e2b_api_key}",
+            "Content-Type": "application/json",
+        }
 
     @property
     def use_e2b(self) -> bool:
@@ -40,11 +52,8 @@ class OpenCodeService:
         """Prefer reusing existing sandbox; create one when missing/unavailable."""
         if self.e2b_sandbox_id:
             response = await client.get(
-                f"https://api.e2b.dev/v1/sandboxes/{self.e2b_sandbox_id}",
-                headers={
-                    "Authorization": f"Bearer {self.e2b_api_key}",
-                    "Content-Type": "application/json",
-                },
+                f"{self.e2b_api_base}/v1/sandboxes/{self.e2b_sandbox_id}",
+                headers=self._e2b_headers(),
             )
             if response.status_code < 400:
                 return self.e2b_sandbox_id
@@ -57,12 +66,9 @@ class OpenCodeService:
             create_payload["template"] = self.e2b_template
 
         create_response = await client.post(
-            "https://api.e2b.dev/v1/sandboxes",
+            f"{self.e2b_api_base}/v1/sandboxes",
             json=create_payload,
-            headers={
-                "Authorization": f"Bearer {self.e2b_api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=self._e2b_headers(),
         )
         create_response.raise_for_status()
         created = create_response.json()
@@ -80,16 +86,13 @@ class OpenCodeService:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 sandbox_id = await self._ensure_sandbox(client)
                 response = await client.post(
-                    f"https://api.e2b.dev/v1/sandboxes/{sandbox_id}/run",
+                    f"{self.e2b_api_base}/v1/sandboxes/{sandbox_id}/run",
                     json={
                         "model": "gpt-4o",
                         "prompt": prompt,
                         "stream": False,
                     },
-                    headers={
-                        "Authorization": f"Bearer {self.e2b_api_key}",
-                        "Content-Type": "application/json",
-                    },
+                    headers=self._e2b_headers(),
                 )
                 response.raise_for_status()
                 result = response.json()

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     # E2B (alternative to local OpenCode)
     E2B_API_KEY: str = ""
     E2B_SANDBOX_ID: str = ""
+    E2B_API_BASE: str = "https://api.e2b.app"
     
     class Config:
         env_file = ".env"
