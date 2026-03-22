@@ -6,11 +6,14 @@ router = APIRouter(tags=["spa"])
 
 
 def _find_frontend_dist() -> str | None:
+    base_dir = os.path.dirname(__file__)
     possible_paths = [
         "/app/dist",
         "/app/frontend/dist",
-        os.path.join(os.path.dirname(__file__), "../../../dist"),
-        os.path.join(os.path.dirname(__file__), "../../dist"),
+        os.path.join(base_dir, "../../../frontend/dist"),
+        os.path.join(base_dir, "../../frontend/dist"),
+        os.path.join(base_dir, "../../../dist"),
+        os.path.join(base_dir, "../../dist"),
     ]
     for p in possible_paths:
         if os.path.exists(os.path.join(p, "index.html")):
