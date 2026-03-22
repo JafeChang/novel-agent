@@ -34,9 +34,9 @@ class SkillResponse(SkillBase):
 
 
 class SkillExecuteRequest(BaseModel):
-    skill_id: int
     parameters: Optional[Dict[str, Any]] = None
     chapter_id: Optional[int] = None
+    model: Optional[str] = None
 
 
 class SkillExecuteResponse(BaseModel):

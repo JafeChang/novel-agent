@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 import os
 from app.core.config import settings
-from app.api import auth, projects, chapters, skills, files, system
+from app.api import auth, projects, chapters, skills, files, system, spa, plans
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -28,6 +28,8 @@ app.include_router(chapters.router)
 app.include_router(skills.router)
 app.include_router(files.router)
 app.include_router(system.router)
+app.include_router(plans.router)
+app.include_router(spa.router)
 
 # Serve frontend static files
 # Try multiple possible locations (Docker copies frontend/ to /app, not /app/frontend/)
@@ -62,6 +64,8 @@ async def root():
 async def startup_event():
     """Initialize database tables on startup"""
     from app.core.database import engine, Base
+    # Ensure model modules are loaded before create_all.
+    from app.models import user, project, chapter, skill, user_plan  # noqa: F401
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as e:

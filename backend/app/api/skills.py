@@ -9,6 +9,8 @@ from app.models.chapter import Chapter
 from app.models.project import Project
 from app.schemas.skill import SkillCreate, SkillUpdate, SkillResponse, SkillExecuteRequest, SkillExecuteResponse
 from app.services.opencode import opencode_service
+from app.services.default_skills import ensure_default_public_novel_skill
+from app.services.plans import plan_service
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
@@ -19,6 +21,7 @@ def list_skills(
     current_user: User = Depends(get_current_user)
 ):
     """List all skills (user's own + public skills)"""
+    ensure_default_public_novel_skill(db, current_user.id)
     skills = db.query(Skill).filter(
         (Skill.user_id == current_user.id) | (Skill.is_public == 1)
     ).all()
@@ -118,35 +121,45 @@ async def execute_skill(
     current_user: User = Depends(get_current_user)
 ):
     """Execute a skill using OpenCode"""
-    # Get the skill
-    skill = db.query(Skill).filter(
-        Skill.id == skill_id,
-        (Skill.user_id == current_user.id) | (Skill.is_public == 1)
-    ).first()
-    if not skill:
-        raise HTTPException(status_code=404, detail="Skill not found")
-    
-    # Build execution context
-    context = {}
-    parameters = request.parameters or {}
-    
-    # If chapter_id provided, get chapter content for context
-    if request.chapter_id:
-        chapter = db.query(Chapter).join(Project).filter(
-            Chapter.id == request.chapter_id,
-            Project.user_id == current_user.id
+    tier = plan_service.get_or_create_user_tier(db, current_user.id)
+    allowed, limit_message = await plan_service.before_skill_execute(
+        current_user.id,
+        tier,
+        request.model
+    )
+    if not allowed:
+        raise HTTPException(status_code=429, detail=limit_message)
+
+    try:
+        # Get the skill
+        skill = db.query(Skill).filter(
+            Skill.id == skill_id,
+            (Skill.user_id == current_user.id) | (Skill.is_public == 1)
         ).first()
-        if chapter:
-            context["chapter_content"] = chapter.content or ""
-    
-    # Add config parameters
-    if skill.config:
-        context["parameters"] = parameters
-        if "style" in skill.config:
-            context["style"] = skill.config["style"]
-    
-    # Build the prompt from skill code
-    prompt = f"""## Skill: {skill.name}
+        if not skill:
+            raise HTTPException(status_code=404, detail="Skill not found")
+        
+        # Build execution context
+        context = {}
+        parameters = request.parameters or {}
+        
+        # If chapter_id provided, get chapter content for context
+        if request.chapter_id:
+            chapter = db.query(Chapter).join(Project).filter(
+                Chapter.id == request.chapter_id,
+                Project.user_id == current_user.id
+            ).first()
+            if chapter:
+                context["chapter_content"] = chapter.content or ""
+        
+        # Add config parameters
+        if skill.config:
+            context["parameters"] = parameters
+            if "style" in skill.config:
+                context["style"] = skill.config["style"]
+        
+        # Build the prompt from skill code
+        prompt = f"""## Skill: {skill.name}
 
 {skill.description or ''}
 
@@ -156,14 +169,16 @@ async def execute_skill(
 ---
 Please execute this skill according to the code above."""
 
-    # Execute via OpenCode
-    result = await opencode_service.execute_skill(prompt, context)
-    
-    return SkillExecuteResponse(
-        success=result["success"],
-        output=result.get("output"),
-        error=result.get("error")
-    )
+        # Execute via OpenCode
+        result = await opencode_service.execute_skill(prompt, context)
+        
+        return SkillExecuteResponse(
+            success=result["success"],
+            output=result.get("output"),
+            error=result.get("error")
+        )
+    finally:
+        await plan_service.after_skill_execute(current_user.id)
 
 
 @router.get("/{skill_id}/preview")

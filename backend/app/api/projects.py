@@ -6,6 +6,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
+from app.services.plans import plan_service
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -25,6 +26,11 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    tier = plan_service.get_or_create_user_tier(db, current_user.id)
+    allowed, message = plan_service.check_project_limit(db, current_user.id, tier)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=message)
+
     project = Project(
         name=project_data.name,
         description=project_data.description,

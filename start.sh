@@ -27,6 +27,10 @@ else
     # Start backend
     echo "Starting backend..."
     cd backend
+    if ! command -v opencode &> /dev/null; then
+        echo "Installing OpenCode CLI..."
+        npm install -g opencode-ai@latest
+    fi
     pip install -r requirements.txt -q
     uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
     BACKEND_PID=$!

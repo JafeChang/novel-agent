@@ -1,3 +1,4 @@
+import asyncio
 import subprocess
 import json
 import os
@@ -14,6 +15,9 @@ class OpenCodeService:
         self.e2b_sandbox_id = os.environ.get("E2B_SANDBOX_ID")
         self.use_e2b = bool(self.e2b_api_key and self.e2b_sandbox_id)
         self.timeout = 120.0
+        # Avoid concurrent CLI runs stepping on shared cwd/session state.
+        max_parallel = int(os.environ.get("OPENCODE_MAX_PARALLEL", "1"))
+        self._semaphore = asyncio.Semaphore(max_parallel)
     
     async def execute_skill(self, prompt: str, context: Optional[dict] = None) -> dict:
         """
@@ -28,9 +32,14 @@ class OpenCodeService:
         """
         full_prompt = self._build_prompt(prompt, context)
         
-        if self.use_e2b:
-            return await self._execute_via_e2b(full_prompt)
-        else:
+        async with self._semaphore:
+            if self.use_e2b:
+                return await self._execute_via_e2b(full_prompt)
+            
+            # Local fallback when OpenCode CLI is unavailable
+            if not await self.health_check():
+                return self._execute_via_local_fallback(context)
+            
             return await self._execute_via_cli(full_prompt)
     
     async def _execute_via_e2b(self, prompt: str) -> dict:
@@ -130,6 +139,39 @@ class OpenCodeService:
                 "success": False,
                 "error": f"执行失败: {str(e)}"
             }
+
+    def _execute_via_local_fallback(self, context: Optional[dict]) -> dict:
+        """Fallback execution when OpenCode CLI is not installed."""
+        chapter_content = (context or {}).get("chapter_content", "")
+        parameters = (context or {}).get("parameters", {})
+
+        if chapter_content:
+            polished = chapter_content.strip()
+            polished = "\n".join(line.rstrip() for line in polished.splitlines())
+            while "\n\n\n" in polished:
+                polished = polished.replace("\n\n\n", "\n\n")
+            focus = parameters.get("focus", "节奏与可读性")
+            output = (
+                "【本地降级模式】未检测到 OpenCode CLI，已返回基础润色结果。\n\n"
+                "修改后正文：\n"
+                f"{polished}\n\n"
+                "修改说明：\n"
+                f"1. 保留原剧情与设定，仅做轻量文本整理。\n"
+                f"2. 清理多余空行与行尾空白，提升可读性。\n"
+                f"3. 建议安装 OpenCode CLI 以获得更强的智能润色效果（当前关注点：{focus}）。"
+            )
+        else:
+            output = (
+                "【本地降级模式】未检测到 OpenCode CLI，且未提供章节内容。\n"
+                "请先传入 chapter_content（或 chapter_id），"
+                "或安装 OpenCode CLI：npm install -g opencode-ai。"
+            )
+
+        return {
+            "success": True,
+            "output": output,
+            "usage": {"fallback": "local_without_opencode_cli"}
+        }
     
     def _build_prompt(self, skill_prompt: str, context: Optional[dict]) -> str:
         """Build a complete prompt with context"""
