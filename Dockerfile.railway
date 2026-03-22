@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && npm install -g pnpm \
     && npm install -g opencode-ai@latest \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && which opencode || (curl -fsSL https://github.com/opencode-ai/cli/releases/latest/download/opencode-linux-x64 -o /usr/local/bin/opencode && chmod +x /usr/local/bin/opencode)
 
 # Install Python dependencies
 COPY backend/requirements.txt .
@@ -28,6 +29,7 @@ RUN cd frontend && pnpm run build && mkdir -p /app/dist && cp -r dist/. /app/dis
 
 # Railway sets PORT env variable
 ENV PORT=8080
+ENV PATH="/usr/local/bin:${PATH}"
 
 EXPOSE 8080
 
