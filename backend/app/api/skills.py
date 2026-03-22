@@ -178,6 +178,7 @@ Please execute this skill according to the code above."""
             error=result.get("error")
         )
     finally:
+        # Always release per-user plan concurrency counters.
         await plan_service.after_skill_execute(current_user.id)
 
 

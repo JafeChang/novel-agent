@@ -28,6 +28,7 @@ app.include_router(chapters.router)
 app.include_router(skills.router)
 app.include_router(files.router)
 app.include_router(system.router)
+# Billing/entitlements + SPA fallback routers (kept together intentionally).
 app.include_router(plans.router)
 app.include_router(spa.router)
 
