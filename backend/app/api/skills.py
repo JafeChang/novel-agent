@@ -13,12 +13,42 @@ from app.services.opencode import opencode_service
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
 
+def ensure_default_public_novel_skill(db: Session, owner_id: int) -> None:
+    """Ensure at least one shared public novel skill exists."""
+    public_skill_exists = db.query(Skill.id).filter(Skill.is_public == 1).first()
+    if public_skill_exists:
+        return
+
+    default_skill = Skill(
+        user_id=owner_id,
+        name="公共小说润色助手",
+        description="通用公共技能：优化章节文风、节奏与对白，保持人设一致。",
+        config={
+            "style": "叙事流畅、细节具体、对白自然",
+            "target_length": "保持原文长度上下浮动 10%",
+            "focus": ["节奏", "情绪", "人设一致性", "可读性"],
+        },
+        code=(
+            "你是一名小说编辑。请在不改变核心剧情与设定的前提下润色文本：\n"
+            "1) 提升叙事流畅度与画面感；\n"
+            "2) 优化对白，避免生硬；\n"
+            "3) 强化冲突与情绪张力；\n"
+            "4) 保持人物语言风格一致。\n"
+            "输出：先给‘修改后正文’，再给‘修改说明（3-5条）’。"
+        ),
+        is_public=1,
+    )
+    db.add(default_skill)
+    db.commit()
+
+
 @router.get("", response_model=List[SkillResponse])
 def list_skills(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """List all skills (user's own + public skills)"""
+    ensure_default_public_novel_skill(db, current_user.id)
     skills = db.query(Skill).filter(
         (Skill.user_id == current_user.id) | (Skill.is_public == 1)
     ).all()
