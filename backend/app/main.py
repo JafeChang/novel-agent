@@ -34,7 +34,6 @@ app.include_router(files.router)
 app.include_router(system.router)
 # Billing/entitlements + SPA fallback routers (kept together intentionally).
 app.include_router(plans.router)
-app.include_router(spa.router)
 
 # Serve frontend static files
 # Try multiple possible locations for different runtime layouts.
@@ -57,8 +56,29 @@ print(f"Frontend dist path: {frontend_dist}")
 
 if frontend_dist:
     assets_dir = os.path.join(frontend_dist, "assets")
-    if os.path.exists(assets_dir):
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+    print(f"Assets dir check: {assets_dir}, exists={os.path.exists(assets_dir)}, isdir={os.path.isdir(assets_dir) if os.path.exists(assets_dir) else 'N/A'}")
+    if os.path.exists(assets_dir) and os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir, html=False), name="assets")
+        print(f"Mounted /assets to {assets_dir}")
+    else:
+        print(f"Assets dir not found or not a directory!")
+
+# Debug: list dist contents
+@app.get("/debug/dist")
+async def debug_dist():
+    """Debug endpoint to check dist contents"""
+    import os
+    dist = "/app/dist"
+    result = {}
+    if os.path.exists(dist):
+        for root, dirs, files in os.walk(dist):
+            rel = os.path.relpath(root, dist)
+            if rel == '.':
+                rel = ''
+            for f in files:
+                full = os.path.join(root, f) if rel else os.path.join(dist, f)
+                result[os.path.join(rel, f) if rel else f] = os.path.exists(full)
+    return {"dist": dist, "exists": os.path.exists(dist), "files": result}
 
 
 @app.get("/favicon.svg")
