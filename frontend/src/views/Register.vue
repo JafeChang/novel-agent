@@ -42,7 +42,7 @@ async function handleRegister() {
   const success = await authStore.register(form.value.email, form.value.username, form.value.password)
   if (success) {
     message.success('注册成功')
-    router.push('/dashboard')
+    router.push('/')
   } else {
     message.error('注册失败，邮箱或用户名可能已被使用')
   }
