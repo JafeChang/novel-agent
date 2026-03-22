@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
@@ -76,3 +76,21 @@ async def startup_event():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "app": settings.APP_NAME}
+
+
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    """
+    Serve frontend routes for client-side routing.
+    Keep API/docs/static routes untouched and return 404 for them when missing.
+    """
+    reserved_prefixes = ("api/", "docs", "openapi.json", "redoc", "assets/", "health")
+    if full_path.startswith(reserved_prefixes):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    if frontend_dist:
+        index_path = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+
+    raise HTTPException(status_code=404, detail="Not Found")
