@@ -24,7 +24,7 @@ RUN cd frontend && (pnpm install --frozen-lockfile || pnpm install)
 
 # Copy frontend source and build
 COPY frontend/ ./frontend/
-RUN cd frontend && pnpm run build && cp -r dist /app/dist
+RUN cd frontend && pnpm run build && cp -r dist/* /app/dist/
 
 # Railway sets PORT env variable
 ENV PORT=8080
