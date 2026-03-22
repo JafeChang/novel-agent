@@ -1,10 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 import os
 from app.core.config import settings
-from app.api import auth, projects, chapters, skills, files, system
+from app.api import auth, projects, chapters, skills, files, system, spa
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -28,6 +28,7 @@ app.include_router(chapters.router)
 app.include_router(skills.router)
 app.include_router(files.router)
 app.include_router(system.router)
+app.include_router(spa.router)
 
 # Serve frontend static files
 # Try multiple possible locations (Docker copies frontend/ to /app, not /app/frontend/)
@@ -71,21 +72,3 @@ async def startup_event():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "app": settings.APP_NAME}
-
-
-@app.get("/{full_path:path}")
-async def spa_fallback(full_path: str):
-    """
-    Serve frontend routes for client-side routing.
-    Keep API/docs/static routes untouched and return 404 for them when missing.
-    """
-    reserved_prefixes = ("api/", "docs", "openapi.json", "redoc", "assets/", "health")
-    if full_path.startswith(reserved_prefixes):
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    if frontend_dist:
-        index_path = os.path.join(frontend_dist, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-
-    raise HTTPException(status_code=404, detail="Not Found")
