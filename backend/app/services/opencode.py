@@ -2,6 +2,7 @@ import asyncio
 import subprocess
 import json
 import os
+import shutil
 import httpx
 from typing import Optional
 
@@ -10,7 +11,6 @@ class OpenCodeService:
     """Service to integrate with OpenCode CLI or E2B for skill execution"""
     
     def __init__(self):
-        self.opencode_cmd = os.environ.get("OPENCODE_CMD", "opencode")
         self.e2b_api_key = os.environ.get("E2B_API_KEY")
         self.e2b_sandbox_id = os.environ.get("E2B_SANDBOX_ID")
         self.use_e2b = bool(self.e2b_api_key and self.e2b_sandbox_id)
@@ -18,6 +18,21 @@ class OpenCodeService:
         # Avoid concurrent CLI runs stepping on shared cwd/session state.
         max_parallel = int(os.environ.get("OPENCODE_MAX_PARALLEL", "1"))
         self._semaphore = asyncio.Semaphore(max_parallel)
+
+        # Build a subprocess environment that guarantees the npm global bin
+        # directory (/usr/local/bin) is on PATH, regardless of how the Python
+        # process was launched.
+        self._subprocess_env = os.environ.copy()
+        npm_bin = "/usr/local/bin"
+        current_path = self._subprocess_env.get("PATH", "")
+        if npm_bin not in current_path.split(os.pathsep):
+            self._subprocess_env["PATH"] = f"{npm_bin}{os.pathsep}{current_path}"
+
+        # Resolve the opencode binary to its full path so subprocess never
+        # has to rely on PATH lookup at call time.
+        cmd_override = os.environ.get("OPENCODE_CMD", "opencode")
+        resolved = shutil.which(cmd_override, path=self._subprocess_env["PATH"])
+        self.opencode_cmd = resolved if resolved else cmd_override
     
     async def execute_skill(self, prompt: str, context: Optional[dict] = None) -> dict:
         """
@@ -86,7 +101,8 @@ class OpenCodeService:
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
-                cwd=os.environ.get("OPENCODE_CWD", "/home/node/.openclaw/workspace")
+                cwd=os.environ.get("OPENCODE_CWD", "/home/node/.openclaw/workspace"),
+                env=self._subprocess_env,
             )
             
             if result.returncode != 0:
@@ -200,7 +216,8 @@ class OpenCodeService:
                 [self.opencode_cmd, "--version"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
+                env=self._subprocess_env,
             )
             return result.returncode == 0
         except:

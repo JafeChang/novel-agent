@@ -25,6 +25,10 @@ RUN apt-get update && apt-get install -y \
     && npm install -g opencode-ai@latest \
     && rm -rf /var/lib/apt/lists/*
 
+# Ensure the npm global bin directory is on PATH for all subsequent layers
+# and for the running container (including Python subprocesses).
+ENV PATH="/usr/local/bin:${PATH}"
+
 # Install Python dependencies
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
