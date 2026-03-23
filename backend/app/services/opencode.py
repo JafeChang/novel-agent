@@ -13,14 +13,41 @@ class OpenCodeService:
         self.e2b_api_base = os.environ.get("E2B_API_BASE", "https://api.e2b.app").strip().rstrip("/")
         self.timeout = 120.0
 
+    def _e2b_url(self, path: str) -> str:
+        normalized_path = path.lstrip("/")
+        return f"{self.e2b_api_base}/{normalized_path}"
+
+    async def _request_with_version_fallback(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        path: str,
+        **kwargs,
+    ) -> httpx.Response:
+        """
+        Prefer current unversioned paths, then fallback to legacy `/v1` paths on 404.
+        """
+        normalized_path = path.lstrip("/")
+        candidates = [normalized_path]
+        if not normalized_path.startswith("v1/"):
+            candidates.append(f"v1/{normalized_path}")
+
+        last_response: Optional[httpx.Response] = None
+        for candidate in candidates:
+            response = await client.request(method, self._e2b_url(candidate), **kwargs)
+            last_response = response
+            if response.status_code != 404:
+                return response
+
+        assert last_response is not None
+        return last_response
+
     def _e2b_headers(self) -> dict:
         """
         E2B's current public REST docs use `X-API-Key`.
-        Keep `Authorization` as a compatibility fallback for older setups.
         """
         return {
             "X-API-Key": self.e2b_api_key,
-            "Authorization": f"Bearer {self.e2b_api_key}",
             "Content-Type": "application/json",
         }
 
@@ -51,8 +78,10 @@ class OpenCodeService:
     async def _ensure_sandbox(self, client: httpx.AsyncClient) -> str:
         """Prefer reusing existing sandbox; create one when missing/unavailable."""
         if self.e2b_sandbox_id:
-            response = await client.get(
-                f"{self.e2b_api_base}/v1/sandboxes/{self.e2b_sandbox_id}",
+            response = await self._request_with_version_fallback(
+                client,
+                "GET",
+                f"sandboxes/{self.e2b_sandbox_id}",
                 headers=self._e2b_headers(),
             )
             if response.status_code < 400:
@@ -65,8 +94,10 @@ class OpenCodeService:
         if self.e2b_template:
             create_payload["template"] = self.e2b_template
 
-        create_response = await client.post(
-            f"{self.e2b_api_base}/v1/sandboxes",
+        create_response = await self._request_with_version_fallback(
+            client,
+            "POST",
+            "sandboxes",
             json=create_payload,
             headers=self._e2b_headers(),
         )
@@ -85,8 +116,10 @@ class OpenCodeService:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 sandbox_id = await self._ensure_sandbox(client)
-                response = await client.post(
-                    f"{self.e2b_api_base}/v1/sandboxes/{sandbox_id}/run",
+                response = await self._request_with_version_fallback(
+                    client,
+                    "POST",
+                    f"sandboxes/{sandbox_id}/run",
                     json={
                         "model": "gpt-4o",
                         "prompt": prompt,
